@@ -4,8 +4,9 @@
 #define ALBOT_OBJECTIFIER_HPP_
 
 #include "albot/MapProcessing/MapProcessing.hpp"
-#include <set>
 #include <unordered_set>
+#define use_int32
+#include "clipper/clipper.hpp"
 
 class Objectifier {
     public:
@@ -112,11 +113,10 @@ class Objectifier {
                 return *this;
             }
         };
-        std::unordered_map<MapProcessing::Line, std::shared_ptr<std::vector<MapProcessing::Line>>, MapProcessing::LineHash> lines_to_object;
-        std::unordered_map<std::shared_ptr<std::vector<MapProcessing::Line>>, Object> object_sizes;
-        std::vector<MapProcessing::Point> points;
-        std::vector<std::shared_ptr<std::vector<MapProcessing::Line>>> objects;
+        ClipperLib::Clipper clipper;
+        std::vector<std::vector<MapProcessing::Line>> objects;
         std::vector<MapProcessing::Line> lines;
+        std::unordered_set<MapProcessing::Point> holes;
         std::shared_ptr<MapProcessing::MapInfo> info;
         Objectifier(std::shared_ptr<MapProcessing::MapInfo> info);
 
@@ -124,6 +124,7 @@ class Objectifier {
          * @brief Run the objectifier on the given data.
          * 
          */
+        void init(bool bloat);
         void run();
 };
 

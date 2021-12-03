@@ -1,38 +1,22 @@
-﻿#include <map>
-#include <iostream>
-#include "Pathfinding/Processor.hpp"
-#include "Pathfinding/Service.hpp"
+﻿#include <fmt/os.h>
+#include "Pathfinding/Pather.hpp"
 #include <memory>
-#include <thread>
 
-// This bit is very important.
 extern "C" void* init(ServiceInfo<PathfindArguments*, long>*info);
 
-long ipc_handler(void* arguments) {
-	return 0;
+Pather* pather;
+
+std::shared_ptr<MapPather::PathResult> ipc_handler(void* arguments) {
+	PathfindArguments* args = (PathfindArguments*)arguments;
+	if (args->start_map != args->end_map) {
+		return std::shared_ptr<MapPather::PathResult>(new MapPather::PathResult{ MapPather::PathResult::FAIL });
+	}
+	return pather->maps.at(args->start_map).path(PointLocation::Vertex::Point{ args->start.x, args->start.y }, PointLocation::Vertex::Point{ args->end.x, args->end.y });
 }
 
-
 void* init(ServiceInfo<PathfindArguments*, long>* info) {
-	GameData* data = info->G;
-	nlohmann::json& geo = data->data->at("geometry");
-	for (nlohmann::detail::iter_impl<nlohmann::json> it = geo.begin(); it != geo.end(); it++) {
-        if (it.value()["placements"].is_array()) {
-            geo[it.key()].erase("placements");
-        }
-        if (it.value()["x_lines"].is_array()) {
-            std::shared_ptr<MapProcessing::MapInfo> info = MapProcessing::parse_map(it.value());
-            info->name = it.key();
-            nlohmann::json& spawns = data->data->at("maps")[it.key()]["spawns"];
-            info->spawns = std::vector<std::pair<double, double>>();
-            info->spawns.reserve(spawns.size());
-            for (nlohmann::detail::iter_impl<nlohmann::json> spawn_it = spawns.begin(); spawn_it != spawns.end(); spawn_it++) {
-                if(spawn_it.value().is_array()) {
-                    info->spawns.push_back(std::pair<double, double>(spawn_it.value()[0].get<double>(), spawn_it.value()[1].get<double>()));
-                }
-            };
-            Processor::process(info);
-        }
-    }
+    GameData* data = info->G;
+	pather = new Pather(data);
+	fmt::print("UGH!\n");
 	return (void*)&ipc_handler;
 }

@@ -1,0 +1,3 @@
+[submodule "lib/clipper-lib"]
+	path = lib/clipper-lib
+	url = https://github.com/brandon-kohn/clipper-lib

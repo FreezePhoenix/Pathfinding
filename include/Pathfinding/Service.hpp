@@ -9,7 +9,6 @@ struct PathfindArguments {
 	};
 	// MUST. BE. SAME. AS. MAP.PATHER. PATH. RESULT. 
 	struct PathResult {
-
 		enum Status {
 			FAIL = 		0,
 			SUCCESS =	1,

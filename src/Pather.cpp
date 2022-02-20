@@ -193,7 +193,7 @@ void MapPather::write_to_file(std::string map_name) {
 	writer.close();
 }
 
-MapPather::MapPather(std::string map_name) : graph(), children(), roots(), neighbhors(), centers() {
+MapPather::MapPather(std::string map_name) : children(), graph(), roots(), neighbhors(), centers() {
 	this->mLogger = spdlog::stdout_color_mt<spdlog::async_factory>("Pathfinding:MapPather(" + map_name + ")");
 	this->graph = PointLocation::GraphInfo();
 	std::string plgi_name = "Maps/" + map_name + ".plgi";
@@ -229,12 +229,12 @@ double MapPather::dist_sq(int a, int b) {
 	auto A = centers[a], B = centers[b];
 	return std::pow(std::pow(B.x - A.x, 2) + std::pow(B.y - A.y, 2), 0.5);
 }
-std::shared_ptr<MapPather::PathResult> MapPather::path(PointLocation::Vertex::Point BEGIN, PointLocation::Vertex::Point END) {
+MapPather::PathResult* MapPather::path(PointLocation::Vertex::Point BEGIN, PointLocation::Vertex::Point END) {
 	auto t1 = std::chrono::high_resolution_clock::now();
 	int start = graph.locate_point(BEGIN),
 		end = graph.locate_point(END);
 	if (start == -1 || end == -1) {
-		return std::shared_ptr<PathResult>(new PathResult{ PathResult::FAIL });
+		return new PathResult{ PathResult::FAIL };
 	}
 	unsigned int real_start = roots[start];
 	unsigned int real_end = roots[end];
@@ -261,6 +261,12 @@ std::shared_ptr<MapPather::PathResult> MapPather::path(PointLocation::Vertex::Po
 				PARENTS.emplace(first_neigh, curr.identifier);
 				DISTANCES.emplace(first_neigh, dist);
 				queue.emplace(dist, first_neigh, dist_sq(first_neigh, real_start));
+			} else {
+				const double dist = curr.distance + dist_sq(curr.identifier, first_neigh);
+				if (dist < DISTANCES[first_neigh]) {	
+					PARENTS.emplace(first_neigh, curr.identifier);
+					DISTANCES.emplace(first_neigh, dist);
+				}
 			}
 		}
 		if (second_neigh != -1) {
@@ -269,6 +275,12 @@ std::shared_ptr<MapPather::PathResult> MapPather::path(PointLocation::Vertex::Po
 				PARENTS.emplace(second_neigh, curr.identifier);
 				DISTANCES.emplace(second_neigh, dist);
 				queue.emplace(dist, second_neigh, dist_sq(second_neigh, real_start));
+			} else {
+				const double dist = curr.distance + dist_sq(curr.identifier, second_neigh);
+				if (dist < DISTANCES[second_neigh]) {	
+					PARENTS.emplace(second_neigh, curr.identifier);
+					DISTANCES.emplace(second_neigh, dist);
+				}
 			}
 		}
 		if (third_neigh != -1) {
@@ -277,32 +289,35 @@ std::shared_ptr<MapPather::PathResult> MapPather::path(PointLocation::Vertex::Po
 				PARENTS.emplace(third_neigh, curr.identifier);
 				DISTANCES.emplace(third_neigh, dist);
 				queue.emplace(dist, third_neigh, dist_sq(third_neigh, real_start));
+			} else {
+				const double dist = curr.distance + dist_sq(curr.identifier, third_neigh);
+				if (dist < DISTANCES[third_neigh]) {	
+					PARENTS.emplace(third_neigh, curr.identifier);
+					DISTANCES.emplace(third_neigh, dist);
+				}
 			}
 		}
 		queue.pop();
 	}
 	if (!found) {
-		return std::shared_ptr<PathResult>(new PathResult{ PathResult::FAIL });
+		return new PathResult{ PathResult::FAIL };
 	}
-	std::shared_ptr<PathResult> result = std::shared_ptr<PathResult>(new PathResult{ PathResult::SUCCESS });
+	PathResult* result = new PathResult{ PathResult::SUCCESS };
 	unsigned int current_node = real_start;
-	while (PARENTS.at(current_node) != -1) {
+	while (PARENTS.at(current_node) != (unsigned int) -1) {
 		result->path.emplace_back(centers[current_node]);
 		current_node = PARENTS.at(current_node);
 	}
 	result->path.emplace_back(centers[current_node]);
     auto t2 = std::chrono::high_resolution_clock::now();
-
-    /* Getting number of milliseconds as an integer. */
-
-    /* Getting number of milliseconds as a double. */
 	std::chrono::duration<double, std::milli> ms_double = t2 - t1;
 	mLogger->info("Pathfinding took: " + std::to_string(ms_double.count()) + "ms");
 	return result;
 }
 
-Pather::Pather(GameData* data) : data(data), maps() {
-	if (data->was_cached) {
+
+Pather::Pather(GameData* data) : data(data), maps(), map_to_id(), id_to_map(), door_map_in(), door_map_out(), doors_in_map(), door_in(), door_out(), door_spawn_out(), door_spawn_in() {
+	if (data->was_cached && false) {
 		nlohmann::json& geo = data->data->at("geometry");
 		for (nlohmann::detail::iter_impl<nlohmann::json> it = geo.begin(); it != geo.end(); it++) {
 			if (it.value()["x_lines"].is_array() && it.value()["x_lines"].size() > 1) {
@@ -316,6 +331,11 @@ Pather::Pather(GameData* data) : data(data), maps() {
 				geo[it.key()].erase("placements");
 			}
 			if (it.value()["x_lines"].is_array()) {
+				int id = map_to_id.size();
+				map_to_id.emplace(it.key(), id);
+				id_to_map.emplace_back(it.key());
+				mLogger->info("Registering map " + it.key() + " with id " + std::to_string(id));
+				// MapPather
 				std::shared_ptr<MapProcessing::MapInfo> info = MapProcessing::parse_map(it.value());
 				info->name = it.key();
 				nlohmann::json& spawns = data->data->at("maps")[it.key()]["spawns"];
@@ -327,7 +347,109 @@ Pather::Pather(GameData* data) : data(data), maps() {
 					}
 				};
 				this->maps.emplace(info->name, info);
+				
+			} else {
+				mLogger->info("Skipping map " + it.key());
+			}
+		}
+		// A second pass to generate door paths.
+		doors_in_map.resize(maps.size());
+		for (nlohmann::detail::iter_impl<nlohmann::json> it = geo.begin(); it != geo.end(); it++) {
+			if (map_to_id.contains(it.key())) {
+				int map_id = map_to_id.at(it.key());
+				nlohmann::json& spawns = data->data->at("maps")[it.key()]["spawns"];
+				nlohmann::json& doors = data->data->at("maps")[it.key()]["doors"];
+				if (doors.is_array()) {
+					int index = 0;
+					// doors_in_map[map_id] = std::vector<int>();
+					doors_in_map[map_id].reserve(doors.size());
+					for (nlohmann::detail::iter_impl<nlohmann::json> door_it = doors.begin(); door_it != doors.end(); door_it++, index++) {
+						nlohmann::json& door = door_it.value();
+						std::string out_map = door.at(4).get<std::string>();
+						if (map_to_id.contains(out_map)) {
+							int id = NEXT_DOOR_ID++;
+							doors_in_map[map_id].emplace_back(id);
+							int out_map_id = map_to_id.at(out_map);
+							nlohmann::json& in_spawn = spawns.at(door.at(6).get<int>());
+							nlohmann::json& out_spawn = data->data->at("maps").at(out_map).at("spawns").at(door.at(5).get<int>());
+							door_spawn_in.emplace_back(door.at(6).get<int>());
+							door_spawn_out.emplace_back(door.at(5).get<int>());
+							double in_x = in_spawn.at(0).get<double>(),
+								in_y = in_spawn.at(1).get<double>(),
+								out_x = out_spawn.at(0).get<double>(),
+								out_y = out_spawn.at(1).get<double>();
+							door_in.emplace_back(in_x, in_y);
+							door_out.emplace_back(out_x, out_y);
+							door_map_in.emplace_back(map_id);
+							door_map_out.emplace_back(out_map_id);
+						} else {
+							mLogger->warn("Door " + std::to_string(index) + " in map " + it.key() + " leads to invalid map " + out_map);
+						}
+					}
+				}
 			}
 		}
 	}
 };
+
+std::vector<std::tuple<PointLocation::Vertex::Point, std::string, PointLocation::Vertex::Point, std::string>>* Pather::path_doors(std::string BEGIN, std::string END) {
+	auto t1 = std::chrono::high_resolution_clock::now();
+	int start = map_to_id.at(BEGIN),
+		end = map_to_id.at(END);
+
+	auto comp = [](const Node& first, const Node& second) {
+		return (first.distance) > (second.distance);
+	};
+	std::priority_queue<Node, std::deque<Node>, decltype(comp)> queue = std::priority_queue<Node, std::deque<Node>, decltype(comp)>();
+	std::map<int, int> PARENTS = std::map<int,int>();
+	std::map<int, double> DISTANCES = std::map<int, double>();
+	for (int door : get_doors(end)) {
+		// mLogger->info("Initial door: " + std::to_string(door_in[door].x) + "," + std::to_string(door_in[door].y) + ":" + std::to_string(door_map_out[door]));
+		PARENTS.emplace(door, -1);
+		DISTANCES.emplace(door, 0);
+		queue.emplace(0, door);
+	}
+	bool found = false;
+	int current_node = -1;
+	while (!queue.empty()) {
+		const Node curr = queue.top();
+		// mLogger->info("Checking: " + std::to_string(curr.identifier) + " in " + std::to_string(door_map_in[curr.identifier]));
+		if (door_map_out[curr.identifier] == start) {
+			found = true;
+			current_node = curr.identifier;
+			break;
+		}
+		for (int door : get_neighbhors(curr.identifier)) {
+			const double dist = curr.distance + dist_sq(curr.identifier, door);
+			if (!PARENTS.contains(door)) {
+				PARENTS.emplace(door, curr.identifier);
+				DISTANCES.emplace(door, dist);
+				queue.emplace(dist, door);
+			} else {
+				if (dist < DISTANCES.at(door)) {	
+					PARENTS.emplace(door, curr.identifier);
+					DISTANCES.emplace(door, dist);
+				}
+			}
+		}
+		queue.pop();
+	}
+	
+	if (!found) {
+		return new std::vector<std::tuple<PointLocation::Vertex::Point, std::string, PointLocation::Vertex::Point, std::string>>();
+	}
+	std::vector<std::tuple<PointLocation::Vertex::Point, std::string, PointLocation::Vertex::Point, std::string>>* result = new std::vector<std::tuple<PointLocation::Vertex::Point, std::string, PointLocation::Vertex::Point, std::string>>();
+	
+	while (PARENTS.at(current_node) != (unsigned int) -1) {
+		result->emplace_back(door_in[current_node], id_to_map[door_map_out[current_node]], door_out[current_node], id_to_map[door_map_in[current_node]]);
+		current_node = PARENTS.at(current_node);
+	}
+	result->emplace_back(door_in[current_node], id_to_map[door_map_out[current_node]], door_out[current_node], id_to_map[door_map_in[current_node]]);
+	auto t2 = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double, std::milli> ms_double = t2 - t1;
+	for (std::tuple<PointLocation::Vertex::Point, std::string, PointLocation::Vertex::Point, std::string>& tup : *result) {
+		mLogger->info(std::get<1>(tup) + " -> " + std::get<3>(tup));
+	}
+	mLogger->info("Pathfinding took: " + std::to_string(ms_double.count()) + "ms");
+	return result;
+}

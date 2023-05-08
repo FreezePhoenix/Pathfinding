@@ -2,9 +2,11 @@
 #include "Pathfinding/Objectifier.hpp"
 #include <chrono>
 
+inline double distance(double dx, double dy) {
+    return std::pow(std::pow(dx, 2.0) + std::pow(dy, 2.0), 0.5);
+}
 
-
-MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info): children(), roots(), neighbhors(), centers() {
+MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(), roots(), neighbhors(), centers() {
 	this->mLogger = spdlog::stdout_color_mt<spdlog::async_factory>("Pathfinding:MapPather(" + info->name + ")");
 	Objectifier* objectifier = new Objectifier(info);
 	objectifier->init(true);
@@ -29,7 +31,8 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info): children(), 
 		*hole_ptr++ = hole.x;
 		*hole_ptr++ = hole.y;
 	}
-	triangulate("pznejQv", input, output, voutput);
+	TriangleManipulator::write_poly_file("Maps/" + info->name + ".poly", input);
+	triangulate("pznejQsv", input, output, voutput);
 	children.resize(output->numberoftriangles);
 	roots.resize(output->numberoftriangles);
 	centers.reserve(output->numberoftriangles);
@@ -61,7 +64,7 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info): children(), 
 				const int&& remaining = neigh_ptr[i * 3] + neigh_ptr[i * 3 + 1] + neigh_ptr[i * 3 + 2] - first_tri - mapped_edges.at(i);
 				queue.emplace(remaining, i);
 			} else {
-				mapped_edges.insert_or_assign(i, first_tri);
+				mapped_edges.insert_or_assign(i, -1);
 			}
 		} else {
 			children[first_tri].insert(i);
@@ -72,7 +75,7 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info): children(), 
 				const int&& remaining = neigh_ptr[i * 3] + neigh_ptr[i * 3 + 1] + neigh_ptr[i * 3 + 2] - second_tri - mapped_edges.at(i);
 				queue.emplace(remaining, i);
 			} else {
-				mapped_edges.insert_or_assign(i, second_tri);
+				mapped_edges.insert_or_assign(i, -1);
 			}
 		} else {
 			children[second_tri].insert(i);
@@ -83,7 +86,7 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info): children(), 
 				const int&& remaining = neigh_ptr[i * 3] + neigh_ptr[i * 3 + 1] + neigh_ptr[i * 3 + 2] - third_tri - mapped_edges.at(i);
 				queue.emplace(remaining, i);
 			} else {
-				mapped_edges.insert_or_assign(i, third_tri);
+				mapped_edges.insert_or_assign(i, -1);
 			}
 		} else {
 			children[third_tri].insert(i);
@@ -103,12 +106,14 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info): children(), 
 		children[first].insert(second);
 		children[first].insert(children[second].begin(), children[second].end());
 		if (subdomains.get()[first] > 0) {
-			subdomains.get()[first] -= 1;
-			if (subdomains.get()[first] == 0) {
-				int remaining = neigh_ptr[first * 3] + neigh_ptr[first * 3 + 1] + neigh_ptr[first * 3 + 2] - second - mapped_edges.at(first);
-				queue.emplace(remaining, first);
-			} else {
-				mapped_edges.insert_or_assign(first, second);
+			if (mapped_edges[first] == -1) {
+				subdomains.get()[first] -= 1;
+				if (subdomains.get()[first] == 0) {
+					int remaining = neigh_ptr[first * 3] + neigh_ptr[first * 3 + 1] + neigh_ptr[first * 3 + 2] - second - mapped_edges.at(first);
+					queue.emplace(remaining, first);
+				} else {
+					mapped_edges.insert_or_assign(first, second);
+				}
 			}
 		}
 		queue.pop();
@@ -117,8 +122,14 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info): children(), 
 		const unsigned int first = tri_ptr[i * 3],
 			second = tri_ptr[i * 3 + 1],
 			third = tri_ptr[i * 3 + 2];
-		const double new_x = (point_ptr[first * 2] + point_ptr[second * 2] + point_ptr[third * 2]) / 3;
-		const double new_y = (point_ptr[first * 2 + 1] + point_ptr[second * 2 + 1] + point_ptr[third * 2 + 1]) / 3;
+
+		
+		double first_distance = distance(point_ptr[second * 2] - point_ptr[third * 2], point_ptr[second * 2 + 1] - point_ptr[third * 2 + 1]);
+		double second_distance = distance(point_ptr[first * 2] - point_ptr[third * 2], point_ptr[first * 2 + 1] - point_ptr[third * 2 + 1]);
+		double third_distance = distance(point_ptr[first * 2] - point_ptr[second * 2], point_ptr[first * 2 + 1] - point_ptr[second * 2 + 1]);
+		
+		const double new_x = (first_distance * point_ptr[first * 2] + second_distance * point_ptr[second * 2] + third_distance * point_ptr[third * 2]) / (first_distance + second_distance + third_distance);
+		const double new_y = (first_distance * point_ptr[first * 2 + 1] + second_distance * point_ptr[second * 2 + 1] + third_distance * point_ptr[third * 2 + 1]) / (first_distance + second_distance + third_distance);
 		centers.emplace_back(new_x, new_y);
 		int subdomain = subdomains.get()[i];
 		if (subdomain != 0) {
@@ -145,8 +156,13 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info): children(), 
 		const unsigned int first = tri_ptr[i * 3],
 			second = tri_ptr[i * 3 + 1],
 			third = tri_ptr[i * 3 + 2];
-		const double new_x = (point_ptr[first * 2] + point_ptr[second * 2] + point_ptr[third * 2]) / 3;
-		const double new_y = (point_ptr[first * 2 + 1] + point_ptr[second * 2 + 1] + point_ptr[third * 2 + 1]) / 3;
+		double first_distance = distance(point_ptr[second * 2] - point_ptr[third * 2], point_ptr[second * 2 + 1] - point_ptr[third * 2 + 1]);
+		double second_distance = distance(point_ptr[first * 2] - point_ptr[third * 2], point_ptr[first * 2 + 1] - point_ptr[third * 2 + 1]);
+		double third_distance = distance(point_ptr[first * 2] - point_ptr[second * 2], point_ptr[first * 2 + 1] - point_ptr[second * 2 + 1]);
+		
+		const double new_x = (first_distance * point_ptr[first * 2] + second_distance * point_ptr[second * 2] + third_distance * point_ptr[third * 2]) / (first_distance + second_distance + third_distance);
+		const double new_y = (first_distance * point_ptr[first * 2 + 1] + second_distance * point_ptr[second * 2 + 1] + third_distance * point_ptr[third * 2 + 1]) / (first_distance + second_distance + third_distance);
+		
 		voutput->pointlist.get()[i * 2] = new_x;
 		voutput->pointlist.get()[i * 2 + 1] = new_y;
 	}
@@ -311,6 +327,12 @@ MapPather::PathResult* MapPather::path(PointLocation::Vertex::Point BEGIN, Point
 	result->path.emplace_back(centers[current_node]);
     auto t2 = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> ms_double = t2 - t1;
+	result->path.insert(result->path.begin(), BEGIN);
+	result->path.emplace_back(END);
+	for (PointLocation::Vertex::Point& point : result->path) {
+		
+		mLogger->info("{" +  std::to_string(point.x) + "," +  std::to_string(point.y) + "}");
+	}
 	mLogger->info("Pathfinding took: " + std::to_string(ms_double.count()) + "ms");
 	return result;
 }

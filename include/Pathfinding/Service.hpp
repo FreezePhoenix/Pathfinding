@@ -15,6 +15,7 @@ struct PathfindArguments {
 		} state;
 		std::vector<Point> path;
 	};
+	typedef std::tuple<Point, std::string, Point, std::string> DoorTuple;
 	Point start;
 	Point end;
 	std::string start_map;

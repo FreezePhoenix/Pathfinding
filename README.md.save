@@ -35,14 +35,13 @@ struct PathfindArguments {
 };
 ```
 
-Despite returning a void*, it is actually a pointer to a PathResult:
+HANDLER, despite returning a void pointer will actually return a pointer of type PathResult:
 
 ```c++
-struct PathResult {
-	enum Status {
-		FAIL = 		0,
-		SUCCESS =	1,
-	} state;
-	std::vector<PathfindArguments::Point> path;
-};
-```
+	struct PathResult {
+		enum Status {
+			FAIL = 		0,
+			SUCCESS =	1,
+		} state;
+		std::vector<Point> path;
+	};

@@ -15,7 +15,7 @@ void Objectifier::init(bool bloat) {
         if (line.range_start != line.range_end) {
             holes.emplace(PointLocation::Point{ line.axis, line.range_start });
             holes.emplace(PointLocation::Point{ line.axis, line.range_end });
-            clipper.AddPath({ { line.axis + 9, line.range_start - 8 }, { line.axis + 9, line.range_end + 3 }, { line.axis - 9, line.range_end + 3 }, { line.axis - 9, line.range_start - 8 } }, ClipperLib::PolyType::ptSubject, true);
+            clipper.AddPath({ { line.axis + 9, line.range_start - 3 }, { line.axis + 9, line.range_end + 8 }, { line.axis - 9, line.range_end + 8 }, { line.axis - 9, line.range_start - 3 } }, ClipperLib::PolyType::ptSubject, true);
         }
     }
 
@@ -24,7 +24,7 @@ void Objectifier::init(bool bloat) {
         if (line.range_start != line.range_end) {
             holes.emplace(PointLocation::Point{ line.range_start, line.axis });
             holes.emplace(PointLocation::Point{ line.range_end, line.axis });
-            clipper.AddPath({ { line.range_end + 9, line.axis - 8 }, { line.range_end + 9, line.axis + 3 }, { line.range_start - 9, line.axis + 3 }, { line.range_start - 9, line.axis - 8 } }, ClipperLib::PolyType::ptSubject, true);
+            clipper.AddPath({ { line.range_end + 9, line.axis - 3 }, { line.range_end + 9, line.axis + 8 }, { line.range_start - 9, line.axis + 8 }, { line.range_start - 9, line.axis - 3 } }, ClipperLib::PolyType::ptSubject, true);
         }
     }
 }

@@ -31,7 +31,6 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 		*hole_ptr++ = hole.x;
 		*hole_ptr++ = hole.y;
 	}
-	TriangleManipulator::write_poly_file("Maps/" + info->name + ".poly", input);
 	triangulate("pznejQsv", input, output, voutput);
 	children.resize(output->numberoftriangles);
 	roots.resize(output->numberoftriangles);

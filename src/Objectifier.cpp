@@ -8,13 +8,15 @@ Objectifier::Objectifier(std::shared_ptr<MapProcessing::MapInfo> info): clipper(
 };
 
 void Objectifier::init(bool bloat) {
-    holes.reserve(this->info->x_lines.size() + this->info->y_lines.size());
-    
+    // Reserve enough memory for al the holes
+    holes.reserve((this->info->x_lines.size() + this->info->y_lines.size()) * 2);
+
     // Insert all of our x_lines into the clipper.
     for (const MapProcessing::AxisLineSegment& line : this->info->x_lines) {
         if (line.range_start != line.range_end) {
             holes.emplace(PointLocation::Point{ line.axis, line.range_start });
             holes.emplace(PointLocation::Point{ line.axis, line.range_end });
+            // Here, we insert a path that is a rectangle. It is the line, inflated by the character's base, with an additional unit of distance for spacing.
             clipper.AddPath({ { line.axis + 9, line.range_start - 3 }, { line.axis + 9, line.range_end + 8 }, { line.axis - 9, line.range_end + 8 }, { line.axis - 9, line.range_start - 3 } }, ClipperLib::PolyType::ptSubject, true);
         }
     }

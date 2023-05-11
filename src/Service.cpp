@@ -21,10 +21,14 @@ void* ipc_handler(void* arguments) {
 	};
 }
 
-
+void cleanup() {
+	delete pather;
+	pather = nullptr;
+}
 
 void* init(ServiceInfo<PathfindArguments, void>* info) {
-    GameData* data = info->G;
+	info->destructor = cleanup;
+	GameData* data = info->G;
 	pather = new Pather(data);
 	return (void*)&ipc_handler;
 }

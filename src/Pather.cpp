@@ -2,20 +2,21 @@
 #include "Pathfinding/Objectifier.hpp"
 #include <chrono>
 
+#include <iostream>
 inline double distance(double dx, double dy) {
     return std::pow(std::pow(dx, 2.0) + std::pow(dy, 2.0), 0.5);
 }
 
 MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(), roots(), neighbhors(), centers() {
 	this->mLogger = spdlog::stdout_color_mt<spdlog::async_factory>("Pathfinding:MapPather(" + info->name + ")");
-	Objectifier* objectifier = new Objectifier(info);
-	objectifier->init(true);
-	objectifier->run();
+	Objectifier objectifier(info);
+	objectifier.init(true);
+	objectifier.run();
 
 	// Really, this method is pretty stupidly complicated, and it changes *a lot*
 	// As such, I'm not going to document it. It's intirely internal, and should not be used by a user.
 	std::shared_ptr<triangulateio> input = TriangleManipulator::create_instance();
-	ShapeManipulator::from_list(objectifier->lines, input);
+	ShapeManipulator::from_list(objectifier.lines, input);
 	if (input->numberofsegments < 3) {
 		return;
 	}
@@ -24,10 +25,10 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 	std::shared_ptr<triangulateio> voutput = TriangleManipulator::create_instance();
 	std::shared_ptr<triangulateio> trimmed_input = TriangleManipulator::create_instance();
 	
-	int num_holes = input->numberofholes = objectifier->holes.size();
+	int num_holes = input->numberofholes = objectifier.holes.size();
 	input->holelist = trimalloc<double>(num_holes * 2);
 	double* hole_ptr = input->holelist.get();
-	for (const MapProcessing::Point& hole : objectifier->holes) {
+	for (const MapProcessing::Point& hole : objectifier.holes) {
 		*hole_ptr++ = hole.x;
 		*hole_ptr++ = hole.y;
 	}
@@ -339,60 +340,53 @@ MapPather::PathResult* MapPather::path(PointLocation::Vertex::Point BEGIN, Point
 
 Pather::Pather(GameData* data) : data(data), maps(), map_to_id(), id_to_map(), door_map_in(), door_map_out(), doors_in_map(), door_in(), door_out(), door_spawn_out(), door_spawn_in() {
 	if (data->was_cached && false) {
-		nlohmann::json& geo = data->data->at("geometry");
-		for (nlohmann::detail::iter_impl<nlohmann::json> it = geo.begin(); it != geo.end(); it++) {
-			if (it.value()["x_lines"].is_array() && it.value()["x_lines"].size() > 1) {
-				this->maps.emplace(it.key(), MapPather(it.key()));
+		const nlohmann::json& geo = data->at("geometry");
+		for (auto& [key, value] : geo.items()) {
+			if (value.is_array() && value["x_lines"].size() > 1) {
+				this->maps.emplace(key, key);
 			}
 		}
 	} else {
-		nlohmann::json& geo = data->data->at("geometry");
-		for (nlohmann::detail::iter_impl<nlohmann::json> it = geo.begin(); it != geo.end(); it++) {
-			if (it.value()["placements"].is_array()) {
-				geo[it.key()].erase("placements");
-			}
-			if (it.value()["x_lines"].is_array()) {
+		const nlohmann::json& geo = data->at("geometry");
+		for (auto& [key, value] : geo.items()) {
+			if (value["x_lines"].is_array()) {
 				int id = map_to_id.size();
-				map_to_id.emplace(it.key(), id);
-				id_to_map.emplace_back(it.key());
-				mLogger->info("Registering map " + it.key() + " with id " + std::to_string(id));
-				// MapPather
-				std::shared_ptr<MapProcessing::MapInfo> info = MapProcessing::parse_map(it.value());
-				info->name = it.key();
-				nlohmann::json& spawns = data->data->at("maps")[it.key()]["spawns"];
+				map_to_id.emplace(key, id);
+				id_to_map.emplace_back(key);
+				mLogger->info("Registering map {} with id {}", key, id);
+				
+				std::shared_ptr<MapProcessing::MapInfo> info = MapProcessing::parse_map(value);
+				info->name = key;
+				const nlohmann::json& spawns = data->at("maps")[key]["spawns"];
 				info->spawns = std::vector<std::pair<double, double>>();
 				info->spawns.reserve(spawns.size());
-				for (nlohmann::detail::iter_impl<nlohmann::json> spawn_it = spawns.begin(); spawn_it != spawns.end(); spawn_it++) {
-					if (spawn_it.value().is_array()) {
-						info->spawns.push_back(std::pair<double, double>(spawn_it.value()[0].get<double>(), spawn_it.value()[1].get<double>()));
-					}
-				};
+				for (const nlohmann::json& entry : spawns) {
+					info->spawns.emplace_back(entry[0].get<double>(), entry[1].get<double>());
+				}
 				this->maps.emplace(info->name, info);
-				
 			} else {
-				mLogger->info("Skipping map " + it.key());
+				mLogger->info("Skipping map {}", key);
 			}
 		}
 		// A second pass to generate door paths.
 		doors_in_map.resize(maps.size());
-		for (nlohmann::detail::iter_impl<nlohmann::json> it = geo.begin(); it != geo.end(); it++) {
-			if (map_to_id.contains(it.key())) {
-				int map_id = map_to_id.at(it.key());
-				nlohmann::json& spawns = data->data->at("maps")[it.key()]["spawns"];
-				nlohmann::json& doors = data->data->at("maps")[it.key()]["doors"];
+		for (auto& [key, value] : geo.items()) {
+			if (map_to_id.contains(key)) {
+				int map_id = map_to_id.at(key);
+				const nlohmann::json& spawns = data->at("maps")[key]["spawns"];
+				const nlohmann::json& doors = data->at("maps")[key]["doors"];
 				if (doors.is_array()) {
 					int index = 0;
 					// doors_in_map[map_id] = std::vector<int>();
 					doors_in_map[map_id].reserve(doors.size());
-					for (nlohmann::detail::iter_impl<nlohmann::json> door_it = doors.begin(); door_it != doors.end(); door_it++, index++) {
-						nlohmann::json& door = door_it.value();
-						std::string out_map = door.at(4).get<std::string>();
+					for (auto& door : doors) {
+						std::string out_map = door[4].get<std::string>();
 						if (map_to_id.contains(out_map)) {
 							int id = NEXT_DOOR_ID++;
 							doors_in_map[map_id].emplace_back(id);
 							int out_map_id = map_to_id.at(out_map);
-							nlohmann::json& in_spawn = spawns.at(door.at(6).get<int>());
-							nlohmann::json& out_spawn = data->data->at("maps").at(out_map).at("spawns").at(door.at(5).get<int>());
+							const nlohmann::json& in_spawn = spawns.at(door.at(6).get<int>());
+							const nlohmann::json& out_spawn = data->at("maps").at(out_map).at("spawns").at(door.at(5).get<int>());
 							door_spawn_in.emplace_back(door.at(6).get<int>());
 							door_spawn_out.emplace_back(door.at(5).get<int>());
 							double in_x = in_spawn.at(0).get<double>(),
@@ -404,8 +398,9 @@ Pather::Pather(GameData* data) : data(data), maps(), map_to_id(), id_to_map(), d
 							door_map_in.emplace_back(map_id);
 							door_map_out.emplace_back(out_map_id);
 						} else {
-							mLogger->warn("Door " + std::to_string(index) + " in map " + it.key() + " leads to invalid map " + out_map);
+							mLogger->warn("Door {} in map {} leads to invalid map {}", index, key, out_map);
 						}
+						index++;
 					}
 				}
 			}

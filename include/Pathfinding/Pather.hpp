@@ -28,9 +28,9 @@ class MapPather {
 		std::map<int, std::tuple<int, int, int>> neighbhors;
 		std::vector<PointLocation::Vertex::Point> centers;
 		PointLocation::GraphInfo graph;
+		std::shared_ptr<spdlog::logger> mLogger;
 		void write_to_file(std::string);
 		double dist_sq(int, int);
-		std::shared_ptr<spdlog::logger> mLogger;
 	public:
 		struct PathResult {
 			enum Status {

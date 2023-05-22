@@ -113,6 +113,10 @@ class Objectifier {
                 return *this;
             }
         };
+        struct RawPoint {
+            short x;
+            short y;
+        };
         ClipperLib::Clipper clipper;
         std::vector<std::vector<MapProcessing::Line>> objects;
         std::vector<MapProcessing::Line> lines;

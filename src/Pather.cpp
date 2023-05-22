@@ -28,11 +28,11 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 	int num_holes = input->numberofholes = objectifier.holes.size();
 	input->holelist = trimalloc<double>(num_holes * 2);
 	double* hole_ptr = input->holelist.get();
-	for (const MapProcessing::Point& hole : objectifier.holes) {
+	for (const auto& hole : objectifier.holes) {
 		*hole_ptr++ = hole.x;
 		*hole_ptr++ = hole.y;
 	}
-	triangulate("pznejQsv", input, output, voutput);
+	triangulate("vpznejQS", input, output, voutput);
 	children.resize(output->numberoftriangles);
 	roots.resize(output->numberoftriangles);
 	centers.reserve(output->numberoftriangles);
@@ -338,7 +338,7 @@ MapPather::PathResult* MapPather::path(PointLocation::Vertex::Point BEGIN, Point
 }
 
 
-Pather::Pather(GameData* data) : data(data), maps(), map_to_id(), id_to_map(), door_map_in(), door_map_out(), doors_in_map(), door_in(), door_out(), door_spawn_out(), door_spawn_in() {
+Pather::Pather(GameData* data) : map_to_id(), id_to_map(), door_map_in(), door_map_out(), door_spawn_in(), door_spawn_out(), doors_in_map(), door_in(), door_out(), data(data), maps() {
 	if (data->was_cached && false) {
 		const nlohmann::json& geo = data->at("geometry");
 		for (auto& [key, value] : geo.items()) {

@@ -16,7 +16,9 @@
 #include <spdlog/spdlog.h>
 
 class MapPather {
-		struct Node {
+	
+	struct Node {
+			int parent;
 			double distance;
 			int identifier;
 			double dist_goal;
@@ -25,9 +27,30 @@ class MapPather {
 		};
 		std::vector<std::set<int>> children;
 		std::vector<int> roots;
-		std::map<int, std::tuple<int, int, int>> neighbhors;
+		std::vector<std::tuple<int, int, int>> neighbhors;
 		std::vector<PointLocation::Vertex::Point> centers;
+		std::shared_ptr<triangulateio> triangle;
 		PointLocation::GraphInfo graph;
+		std::pair<PointLocation::Vertex::Point, PointLocation::Vertex::Point> portal(int from, int to) {
+			int* neigh_ptr = triangle->neighborlist.get();
+			double* point_ptr = triangle->pointlist.get();
+			unsigned int* tri_ptr = triangle->trianglelist.get();
+			if (neigh_ptr[from * 3] == to) {
+				auto left = tri_ptr[from * 3 + 1];
+				auto right = tri_ptr[from * 3 + 2];
+				return { {point_ptr[left * 2], point_ptr[left * 2 + 1]}, {point_ptr[right * 2], point_ptr[right * 2 + 1] } };
+			}
+			if (neigh_ptr[from * 3 + 1] == to) {
+				auto left = tri_ptr[from * 3 + 2];
+				auto right = tri_ptr[from * 3];
+				return { {point_ptr[left * 2], point_ptr[left * 2 + 1]}, {point_ptr[right * 2], point_ptr[right * 2 + 1] } };
+			}
+			if (neigh_ptr[from * 3 + 2] == to) {
+				auto left = tri_ptr[from * 3];
+				auto right = tri_ptr[from * 3 + 1];
+				return { {point_ptr[left * 2], point_ptr[left * 2 + 1]}, {point_ptr[right * 2], point_ptr[right * 2 + 1] } };
+			}
+		}
 		std::shared_ptr<spdlog::logger> mLogger;
 		void write_to_file(std::string);
 		double dist_sq(int, int);
@@ -67,8 +90,8 @@ class Pather {
 			return get_doors(door_map_out.at(door));
 		};
 		double dist_sq(int first, int second) {
-			auto _first = door_out.at(first);
-			auto _second = door_in.at(first);
+			auto& _first = door_out.at(first);
+			auto& _second = door_in.at(first);
 			return std::pow(std::pow(_first.x - _second.x, 2) + std::pow(_first.y - _second.y, 2), 0.5);
 		}
 	public:

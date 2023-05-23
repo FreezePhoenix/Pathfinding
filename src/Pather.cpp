@@ -7,6 +7,75 @@ inline double distance(double dx, double dy) {
     return std::pow(std::pow(dx, 2.0) + std::pow(dy, 2.0), 0.5);
 }
 
+inline double triarea2(PointLocation::Vertex::Point a, PointLocation::Vertex::Point b, PointLocation::Vertex::Point c) {
+	const double ax = b.x - a.x;
+	const double ay = b.y - a.y;
+	const double bx = c.x - a.x;
+	const double by = c.y - a.y;
+	return bx * ay - ax * by;
+}
+
+inline bool vequal(PointLocation::Vertex::Point a, PointLocation::Vertex::Point b) {
+	return distance(a.x - b.x, a.y - b.y) < 0.001 * 0.001;
+}
+
+
+
+std::vector<PointLocation::Vertex::Point> string_pull(const std::vector<PointLocation::Vertex::Point> portals) {
+	PointLocation::Vertex::Point portalApex;
+	PointLocation::Vertex::Point portalLeft;
+	PointLocation::Vertex::Point portalRight;
+	size_t apexIndex = 0, leftIndex = 0, rightIndex = 0;
+	std::vector<PointLocation::Vertex::Point> output = std::vector<PointLocation::Vertex::Point>();
+	portalApex = portals[0];
+	portalLeft = portals[0];
+	portalRight = portals[1];
+
+	output.emplace_back(portalApex);
+	for (size_t i = 1; i < portals.size() / 2; ++i) {
+		const PointLocation::Vertex::Point left = portals[i * 2];
+		const PointLocation::Vertex::Point right = portals[i * 2 + 1];
+		if (triarea2(portalApex, portalRight, right) <= 0.0) {
+			if (vequal(portalApex, portalRight) || triarea2(portalApex, portalLeft, right) > 0.0) {
+				portalRight = right;
+				rightIndex = i;
+			} else {
+				output.emplace_back(portalLeft);
+				
+				portalApex = portalLeft;
+				apexIndex = leftIndex;
+				
+				portalLeft = portalApex;
+				portalRight = portalApex;
+				leftIndex = apexIndex;
+				rightIndex = apexIndex;
+				i = apexIndex;
+				continue;
+			}
+		}
+		if (triarea2(portalApex, portalLeft, left) >= 0.0) {
+			if (vequal(portalApex, portalLeft) || triarea2(portalApex, portalRight, left) < 0.0) {
+				portalLeft = left;
+				leftIndex = i;
+			} else {
+				output.emplace_back(portalRight);
+				
+				portalApex = portalRight;
+				apexIndex = rightIndex;
+
+				portalLeft = portalApex;
+				portalRight = portalApex;
+				leftIndex = apexIndex;
+				rightIndex = apexIndex;
+				i = apexIndex;
+				continue;
+			}
+		}
+	}
+	output.emplace_back(portals[(portals.size() / 2 - 1) * 2]);
+	return output;
+}
+
 MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(), roots(), neighbhors(), centers() {
 	this->mLogger = spdlog::stdout_color_mt<spdlog::async_factory>("Pathfinding:MapPather(" + info->name + ")");
 	Objectifier objectifier(info);
@@ -32,35 +101,29 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 		*hole_ptr++ = hole.x;
 		*hole_ptr++ = hole.y;
 	}
-	triangulate("vpznejQS", input, output, voutput);
+	triangulate("pznjQ", input, output, nullptr);
 	children.resize(output->numberoftriangles);
 	roots.resize(output->numberoftriangles);
 	centers.reserve(output->numberoftriangles);
-	std::shared_ptr<triangulateio> temp = TriangleManipulator::create_instance();
-	TriangleManipulator::filter_edges(voutput, temp, [](int p1, int p2, REAL norm1, REAL norm2) {
-		return p2 != -1;
-	});
-	std::shared_ptr<int> subdomains = trimalloc<int>(output->numberoftriangles);
-	std::map<int, int> mapped_edges = std::map<int, int>();
+	
+	std::vector<int> subdomains(output->numberoftriangles);
+	std::unordered_map<int, int> mapped_edges = std::unordered_map<int, int>();
 	for (unsigned int i = 0; i < output->numberoftriangles; i++) {
-		subdomains.get()[i] = 2;
+		subdomains[i] = 2;
 		mapped_edges.insert_or_assign(i, -1);
 	}
-	int* edge_ptr = output->edgelist.get();
 	int* neigh_ptr = output->neighborlist.get();
-	int* edge_marker_ptr = output->edgemarkerlist.get();
-	int* v_edge_list = voutput->edgelist.get();
 	unsigned int* tri_ptr = output->trianglelist.get();
 	double* point_ptr = output->pointlist.get();
-	
+
 	std::queue<std::pair<int, int>> queue = std::queue<std::pair<int, int>>();
 	for (int i = 0; i < output->numberoftriangles; i++) {
 		int first_tri = neigh_ptr[i * 3];
 		int second_tri = neigh_ptr[i * 3 + 1];
 		int third_tri = neigh_ptr[i * 3 + 2];
 		if (first_tri == -1) {
-			subdomains.get()[i] -= 1;
-			if (subdomains.get()[i] == 0) {
+			subdomains[i] -= 1;
+			if (subdomains[i] == 0) {
 				const int&& remaining = neigh_ptr[i * 3] + neigh_ptr[i * 3 + 1] + neigh_ptr[i * 3 + 2] - first_tri - mapped_edges.at(i);
 				queue.emplace(remaining, i);
 			} else {
@@ -70,8 +133,8 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 			children[first_tri].insert(i);
 		}
 		if (second_tri == -1) {
-			subdomains.get()[i] -= 1;
-			if (subdomains.get()[i] == 0) {
+			subdomains[i] -= 1;
+			if (subdomains[i] == 0) {
 				const int&& remaining = neigh_ptr[i * 3] + neigh_ptr[i * 3 + 1] + neigh_ptr[i * 3 + 2] - second_tri - mapped_edges.at(i);
 				queue.emplace(remaining, i);
 			} else {
@@ -81,8 +144,8 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 			children[second_tri].insert(i);
 		}
 		if (third_tri == -1) {
-			subdomains.get()[i] -= 1;
-			if (subdomains.get()[i] == 0) {
+			subdomains[i] -= 1;
+			if (subdomains[i] == 0) {
 				const int&& remaining = neigh_ptr[i * 3] + neigh_ptr[i * 3 + 1] + neigh_ptr[i * 3 + 2] - third_tri - mapped_edges.at(i);
 				queue.emplace(remaining, i);
 			} else {
@@ -92,23 +155,16 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 			children[third_tri].insert(i);
 		}
 	}
-	
-	std::shared_ptr<triangulateio> temp2 = TriangleManipulator::create_instance();
-	unsigned int numb_edges = 0;
-	std::vector<int> edges = std::vector<int>();
-	int* subdomain_ptr = subdomains.get();
+
 	while (queue.size() > 0) {
 		int first, second;
 		std::tie(first, second) = queue.front();
-		numb_edges++;
-		edges.push_back(first);
-		edges.push_back(second);
 		children[first].insert(second);
 		children[first].insert(children[second].begin(), children[second].end());
-		if (subdomains.get()[first] > 0) {
+		if (subdomains[first] > 0) {
 			if (mapped_edges[first] == -1) {
-				subdomains.get()[first] -= 1;
-				if (subdomains.get()[first] == 0) {
+				subdomains[first] -= 1;
+				if (subdomains[first] == 0) {
 					int remaining = neigh_ptr[first * 3] + neigh_ptr[first * 3 + 1] + neigh_ptr[first * 3 + 2] - second - mapped_edges.at(first);
 					queue.emplace(remaining, first);
 				} else {
@@ -118,6 +174,7 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 		}
 		queue.pop();
 	}
+	neighbhors.reserve(output->numberoftriangles);
 	for (unsigned int i = 0; i < output->numberoftriangles; i++) {
 		const unsigned int first = tri_ptr[i * 3],
 			second = tri_ptr[i * 3 + 1],
@@ -131,57 +188,43 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 		const double new_x = (first_distance * point_ptr[first * 2] + second_distance * point_ptr[second * 2] + third_distance * point_ptr[third * 2]) / (first_distance + second_distance + third_distance);
 		const double new_y = (first_distance * point_ptr[first * 2 + 1] + second_distance * point_ptr[second * 2 + 1] + third_distance * point_ptr[third * 2 + 1]) / (first_distance + second_distance + third_distance);
 		centers.emplace_back(new_x, new_y);
-		int subdomain = subdomains.get()[i];
-		if (subdomain != 0) {
+		int subdomain = subdomains[i];
+		// TODO: Optimize child nodes.
+		if (subdomain != 0 || true) {
 			roots[i] = i;
 			int first_neigh = -1, second_neigh = -1, third_neigh = -1;
-			if (neigh_ptr[i * 3] != -1 && subdomains.get()[neigh_ptr[i * 3]] != 0) {
+			// if (neigh_ptr[i * 3] != -1 && subdomains[neigh_ptr[i * 3]] != 0) {
 				first_neigh = neigh_ptr[i * 3];
-			}
-			if (neigh_ptr[i * 3 + 1] != -1 && subdomains.get()[neigh_ptr[i * 3 + 1]] != 0) {
+			// }
+			// if (neigh_ptr[i * 3 + 1] != -1 && subdomains[neigh_ptr[i * 3 + 1]] != 0) {
 				second_neigh = neigh_ptr[i * 3 + 1];
-			}
-			if (neigh_ptr[i * 3 + 2] != -1 && subdomains.get()[neigh_ptr[i * 3 + 2]] != 0) {
+			// }
+			// if (neigh_ptr[i * 3 + 2] != -1 && subdomains[neigh_ptr[i * 3 + 2]] != 0) {
 				third_neigh = neigh_ptr[i * 3 + 2];
-			}
-			neighbhors.emplace(i, std::tuple<int, int, int>(first_neigh, second_neigh, third_neigh));
-			for (unsigned int child : children[i]) {
-				if (subdomains.get()[child] == 0) {
-					roots[child] = i;
-				}
-			}
+			// }
+			neighbhors.emplace_back(first_neigh, second_neigh, third_neigh);
 		}
+		// if (subdomain == 1) {
+		// 	for (unsigned int child : children[i]) {
+		// 		if (subdomains[child] == 0) {
+		// 			roots[child] = i;
+		// 		}
+		// 	}
+		// }
 	}
-	for (unsigned int i = 0; i < voutput->numberofpoints; i++) {
-		const unsigned int first = tri_ptr[i * 3],
-			second = tri_ptr[i * 3 + 1],
-			third = tri_ptr[i * 3 + 2];
-		double first_distance = distance(point_ptr[second * 2] - point_ptr[third * 2], point_ptr[second * 2 + 1] - point_ptr[third * 2 + 1]);
-		double second_distance = distance(point_ptr[first * 2] - point_ptr[third * 2], point_ptr[first * 2 + 1] - point_ptr[third * 2 + 1]);
-		double third_distance = distance(point_ptr[first * 2] - point_ptr[second * 2], point_ptr[first * 2 + 1] - point_ptr[second * 2 + 1]);
-		
-		const double new_x = (first_distance * point_ptr[first * 2] + second_distance * point_ptr[second * 2] + third_distance * point_ptr[third * 2]) / (first_distance + second_distance + third_distance);
-		const double new_y = (first_distance * point_ptr[first * 2 + 1] + second_distance * point_ptr[second * 2 + 1] + third_distance * point_ptr[third * 2 + 1]) / (first_distance + second_distance + third_distance);
-		
-		voutput->pointlist.get()[i * 2] = new_x;
-		voutput->pointlist.get()[i * 2 + 1] = new_y;
-	}
-	temp2->numberofedges = numb_edges;
-	temp2->edgelist = std::shared_ptr<int>(edges.data(), [](void*) {});
-	output->numberofsubdomains = 3;
-	output->subdomainlist = subdomains;
+	this->triangle = output;
 	this->graph = output;
 	this->graph.process();
 	this->graph.map_triangles(output);
-	TriangleManipulator::write_part_file("Maps/" + info->name + ".part", output);
-	TriangleManipulator::write_poly_file("Maps/" + info->name + ".poly", input);
-	TriangleManipulator::write_edge_file("Maps/" + info->name + ".v.edge", temp2);
-	TriangleManipulator::write_node_file("Maps/" + info->name + ".v.node", voutput);
-	TriangleManipulator::write_node_file("Maps/" + info->name + ".node", output);
-	TriangleManipulator::write_ele_file("Maps/" + info->name + ".ele", output);
-	TriangleManipulator::write_neigh_file("Maps/" + info->name + ".neigh", output);
-	TriangleManipulator::write_edge_file("Maps/" + info->name + ".edge", output);
-	this->write_to_file(info->name);
+	// TriangleManipulator::write_part_file("Maps/" + info->name + ".part", output);
+	// TriangleManipulator::write_poly_file("Maps/" + info->name + ".poly", input);
+	// TriangleManipulator::write_edge_file("Maps/" + info->name + ".v.edge", temp2);
+	// TriangleManipulator::write_node_file("Maps/" + info->name + ".v.node", voutput);
+	// TriangleManipulator::write_node_file("Maps/" + info->name + ".node", output);
+	// TriangleManipulator::write_ele_file("Maps/" + info->name + ".ele", output);
+	// TriangleManipulator::write_neigh_file("Maps/" + info->name + ".neigh", output);
+	// TriangleManipulator::write_edge_file("Maps/" + info->name + ".edge", output);
+	// this->write_to_file(info->name);
 }
 
 void MapPather::write_to_file(std::string map_name) {
@@ -202,9 +245,8 @@ void MapPather::write_to_file(std::string map_name) {
 			writer.write(child);
 		}
 	}
-	for (std::pair<int, std::tuple<int, int, int>> _pair : neighbhors) {
-		writer.write(_pair.first);
-		writer.write(&_pair.second);
+	for (unsigned int i = 0; i < neighbhors.size(); i++) {
+		writer.write(neighbhors[i]);
 	}
 	writer.close();
 }
@@ -234,9 +276,8 @@ MapPather::MapPather(std::string map_name) : children(), graph(), roots(), neigh
 		}
 	}
 	for (unsigned int i = 0; i < neigh_count; i++) {
-		const auto first = reader.read<int>();
 		const auto second = reader.read<std::tuple<int, int, int>>();
-		neighbhors.emplace(first, second);
+		neighbhors.emplace_back(second);
 	}
 	reader.close();
 }
@@ -252,8 +293,8 @@ MapPather::PathResult* MapPather::path(PointLocation::Vertex::Point BEGIN, Point
 	if (start == -1 || end == -1) {
 		return new PathResult{ PathResult::FAIL };
 	}
-	unsigned int real_start = roots[start];
-	unsigned int real_end = roots[end];
+	unsigned int real_start = start; // roots[start];
+	unsigned int real_end = end; // roots[end];
 	auto comp = [](const Node& first, const Node& second) {
 		return (first.distance + first.dist_goal) > (second.distance + second.dist_goal);
 	};
@@ -319,16 +360,29 @@ MapPather::PathResult* MapPather::path(PointLocation::Vertex::Point BEGIN, Point
 		return new PathResult{ PathResult::FAIL };
 	}
 	PathResult* result = new PathResult{ PathResult::SUCCESS };
+	std::vector<PointLocation::Vertex::Point> portals = std::vector<PointLocation::Vertex::Point>();
+	portals.emplace_back(BEGIN);
+	portals.emplace_back(BEGIN);
 	unsigned int current_node = real_start;
-	while (PARENTS.at(current_node) != (unsigned int) -1) {
-		result->path.emplace_back(centers[current_node]);
+	while (PARENTS.at(current_node) != (unsigned int)-1) {
+		auto pair = portal(current_node, PARENTS.at(current_node));
+		
+		portals.emplace_back(pair.second);
+		portals.emplace_back(pair.first);
 		current_node = PARENTS.at(current_node);
 	}
-	result->path.emplace_back(centers[current_node]);
+	portals.emplace_back(END);
+	portals.emplace_back(END);
+	std::vector<PointLocation::Vertex::Point> pulled = string_pull(portals);
+	result->path = pulled;
+	// result->path.emplace_back(centers[current_node]);
     auto t2 = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> ms_double = t2 - t1;
-	result->path.insert(result->path.begin(), BEGIN);
-	result->path.emplace_back(END);
+	// result->path.insert(result->path.begin(), BEGIN);
+	// result->path.emplace_back(END);
+	// std::transform(children[real_end].begin(), std::find(children[real_end].begin(), children[real_end].end(), end), std::back_inserter(result->path), [&](const int location) {
+	// 	return this->centers[location];
+	// });
 	for (PointLocation::Vertex::Point& point : result->path) {
 		
 		mLogger->info("{" +  std::to_string(point.x) + "," +  std::to_string(point.y) + "}");

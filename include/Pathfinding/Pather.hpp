@@ -16,18 +16,18 @@
 #include <spdlog/spdlog.h>
 
 class MapPather {
-	
-	struct Node {
-			int parent;
-			double distance;
-			int identifier;
-			double dist_goal;
-			Node(double a, int b, double c) : distance(a), identifier(b), dist_goal(c) {
-			};
+	public:
+		constexpr inline static unsigned int NULL_IDENFITIER = (unsigned int)-1;
+		struct Node {
+			double traveled;
+			unsigned int identifier;
+			inline bool operator==(const Node& other) const {
+				return identifier == other.identifier;
+			}
 		};
 		std::vector<std::set<int>> children;
 		std::vector<int> roots;
-		std::vector<std::tuple<int, int, int>> neighbhors;
+		std::vector<std::tuple<unsigned int, unsigned int, unsigned int>> neighbhors;
 		std::vector<PointLocation::Vertex::Point> centers;
 		std::shared_ptr<triangulateio> triangle;
 		PointLocation::GraphInfo graph;
@@ -52,8 +52,9 @@ class MapPather {
 			}
 		}
 		std::shared_ptr<spdlog::logger> mLogger;
-		void write_to_file(std::string);
-		double dist_sq(int, int);
+		void write_to_file(std::string map_name);
+		void read_from_file(std::string map_name);
+		double dist_sq(unsigned int, unsigned int);
 	public:
 		struct PathResult {
 			enum Status {
@@ -70,28 +71,29 @@ class MapPather {
 class Pather {
 		struct Node {
 			double distance;
-			int identifier;
+			unsigned int identifier;
 		};
-		std::unordered_map<std::string, int> map_to_id;
+		std::unordered_map<std::string, unsigned int> map_to_id;
+		std::vector<std::vector<PointLocation::Vertex::Point>> map_spawns;
 		std::vector<std::string> id_to_map;
-		std::vector<int> door_map_in;
-		std::vector<int> door_map_out;
-		std::vector<int> door_spawn_in;
-		std::vector<int> door_spawn_out;
-		std::vector<std::vector<int>> doors_in_map;
+		std::vector<unsigned int> door_map_in;
+		std::vector<unsigned int> door_map_out;
+		std::vector<unsigned int> door_spawn_in;
+		std::vector<unsigned int> door_spawn_out;
+		std::vector<std::vector<unsigned int>> doors_in_map;
 		std::vector<PointLocation::Vertex::Point> door_in;
 		std::vector<PointLocation::Vertex::Point> door_out;
-		int NEXT_DOOR_ID = 0;
+		unsigned int NEXT_DOOR_ID = 0;
 		GameData* data;
-		inline std::vector<int>& get_doors(int map) {
-			return doors_in_map.at(map);
+		inline std::vector<unsigned int>& get_doors(unsigned int map) {
+			return doors_in_map[map];
 		}
-		inline std::vector<int>& get_neighbhors(int door) {
-			return get_doors(door_map_out.at(door));
+		inline std::vector<unsigned int>& get_neighbhors(unsigned int door) {
+			return get_doors(door_map_out[door]);
 		};
-		double dist_sq(int first, int second) {
-			auto& _first = door_out.at(first);
-			auto& _second = door_in.at(first);
+		double dist_sq(unsigned int first, unsigned int second) {
+			auto& _first = door_out[first];
+			auto& _second = door_in[first];
 			return std::pow(std::pow(_first.x - _second.x, 2) + std::pow(_first.y - _second.y, 2), 0.5);
 		}
 	public:
@@ -99,6 +101,13 @@ class Pather {
 		std::map<std::string, MapPather> maps;
 		Pather(GameData* data);
 		std::vector<std::tuple<PointLocation::Vertex::Point, std::string, PointLocation::Vertex::Point, std::string>>* path_doors(std::string, std::string);
+};
+
+template<>
+struct std::hash<MapPather::Node> {
+	inline std::size_t operator()(MapPather::Node const& n) const noexcept {
+		return n.identifier;
+	}
 };
 
 #endif /* ALBOT_PATHFINDING_PATHER_HPP_ */

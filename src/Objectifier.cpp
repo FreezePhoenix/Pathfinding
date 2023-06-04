@@ -35,7 +35,7 @@ void Objectifier::run() {
     ClipperLib::Paths polygons;
     clipper.Execute(ClipperLib::ClipType::ctUnion, polygons, ClipperLib::PolyFillType::pftPositive);
     
-    size_t num_lines = polygons.size();
+    size_t num_lines = 0;
     for (const ClipperLib::Path& polygon : polygons) {
         num_lines += polygon.size();
     }
@@ -46,8 +46,8 @@ void Objectifier::run() {
             const ClipperLib::IntPoint& second = polygon[i + 1];
             lines.emplace_back(first.X, first.Y, second.X, second.Y);
         }
-        const ClipperLib::IntPoint& first = polygon[polygon.size() - 1];
-        const ClipperLib::IntPoint& second = polygon[0];
+        const ClipperLib::IntPoint& first = polygon.back();
+        const ClipperLib::IntPoint& second = polygon.front();
         lines.emplace_back(first.X, first.Y, second.X, second.Y);
     }
 };

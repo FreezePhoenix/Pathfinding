@@ -2,9 +2,10 @@
 #include "Pathfinding/Pather.hpp"
 #include "Pathfinding/PriorityFibonacciQueue.hpp"
 #include <memory>
+#include <variant>
 #include <iostream>
 
-extern "C" ServiceInfo<PathfindArguments, void*>::HANDLER init(ServiceInfo<PathfindArguments, void>*info);
+extern "C" ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>::HANDLER init(ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>*info);
 
 Pather* pather;
 
@@ -25,15 +26,17 @@ struct std::hash<N>
     }
 };
 
-void* ipc_handler(const PathfindArguments& args) {
+PathfindArguments::MapPathResult ipc_handler(const PathfindArguments& args) {
 	if (args.start_map != args.end_map) {
-		return pather->path_doors(args.start_map, args.end_map);
+		pather->mLogger->info("Cross-map pathfinding not supported ({} -> {})", args.start_map, args.end_map);
+		return { PathfindArguments::MapPathResult::FAIL };
 	} else {
-		auto mappather = pather->maps.find(args.start_map);
-		if (mappather != pather->maps.end()) {
-			return mappather->second.path({ args.start.x, args.start.y }, { args.end.x, args.end.y });
+		if (pather->map_to_id.contains(args.start_map)) {
+			
+			unsigned int map_id = pather->map_to_id[args.start_map];
+			return pather->maps[map_id].path(args.start, args.end);
 		}
-		return nullptr;
+		return { PathfindArguments::MapPathResult::FAIL };
 	};
 }
 
@@ -42,14 +45,14 @@ void cleanup() {
 	pather = nullptr;
 }
 
-ServiceInfo<PathfindArguments, void*>::HANDLER init(ServiceInfo<PathfindArguments, void>* info) {
+ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>::HANDLER init(ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>* info) {
 	info->destructor = cleanup;
 	GameData* data = info->G;
 	pather = new Pather(data);
 	
-	auto path = (PathfindArguments::PathResult*)ipc_handler(PathfindArguments{ PathfindArguments::Point{ 778,-506}, PathfindArguments::Point{ -700,906 }, "main", "main" });
-	// std::cout << path->path.size() << std::endl;
-	for (PathfindArguments::Point point : path->path) {
+	auto path = ipc_handler(PathfindArguments{ PathfindArguments::Point{ 778,-506}, PathfindArguments::Point{ -700,906 }, "main", "main" });
+	std::cout << path.path.size() << std::endl;
+	for (PathfindArguments::Point point : path.path) {
 		pather->mLogger->info(std::to_string(point.x) + "," + std::to_string(point.y));
 	}
 	return ipc_handler;

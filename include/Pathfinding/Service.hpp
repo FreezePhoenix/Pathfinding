@@ -1,14 +1,12 @@
 #pragma once
 
 #include "albot/ServiceInterface.hpp"
+#include "TriangleManipulator/PointLocation.hpp"
 
 struct PathfindArguments {
-	struct Point {
-		double x;
-		double y;
-	};
+	typedef PointLocation::Vertex::Point Point;
 	// MUST. BE. SAME. AS. MAP.PATHER. PATH. RESULT. 
-	struct PathResult {
+	struct MapPathResult {
 		enum Status {
 			FAIL = 		0,
 			SUCCESS =	1,

@@ -2,137 +2,110 @@
 #include <vector>
 #include <algorithm>
 
-template<typename K, typename T, typename C = std::less<K>>
-	requires std::predicate<C, K, K>
+template<typename K, typename T, typename C = std::less<K>, typename I = std::equal_to<T>>
+	requires std::predicate<C, K, K> && std::predicate<I, T, T>
 class PriorityVectorQueue {
 	std::vector<std::pair<K, T>> heap;
+	[[no_unique_address]]
+	struct value_comp {
+		[[no_unique_address]]
+		C comparator;
+		constexpr value_comp(const C& c) : comparator(c) {
+		};
+		constexpr bool operator()(const std::pair<K, T>& left, const std::pair<K, T>& right) const {
+			return comparator(left.first, right.first);
+		}
+		constexpr bool operator()(const K& left, const K& right) const {
+			return comparator(left, right);
+		}
+	} value_compare;
+	[[no_unique_address]]
+	struct identity {
+		[[no_unique_address]]
+		I predicate;
+		constexpr identity(const I& i) : predicate(i) {
+
+		};
+		constexpr bool operator()(const std::pair<K, T>& left, const T& right) const {
+			return predicate(left.second, right);
+		}
+		template<typename TT>
+			requires std::predicate<I, T, TT>
+		constexpr bool operator()(const std::pair<K, T>& left, TT&& right) const {
+			return predicate(left.second, std::forward<TT>(right));
+		}
+	} value_ident;
 public:
-	constexpr void push(const K& key, const T& elem) {
-		heap.emplace_back(key, elem);
-		std::push_heap(heap.begin(), heap.end(), [](const auto& left, const auto& right) {
-			return C()(left.first, right.first);
-		});
+	constexpr PriorityVectorQueue() : value_compare(C()), value_ident(I()) {
+	}
+	constexpr PriorityVectorQueue(const C& c) : value_compare(c), value_ident(I()) {
 	};
-	constexpr void push(K&& key, T&& elem) {
-		heap.emplace_back(std::move(key), std::move(elem));
-		std::push_heap(heap.begin(), heap.end(), [](const auto& left, const auto& right) {
-			return C()(left.first, right.first);
-		});
+	constexpr PriorityVectorQueue(const I& i, const C& c = C()) : value_compare(c), value_ident(i) {
+	};
+	constexpr void push(const std::pair<K, T>& entry) {
+		heap.push_back(entry);
+		std::push_heap(heap.begin(), heap.end(), value_compare);
+	};
+	constexpr void push(std::pair<K, T>&& entry) {
+		heap.push_back(std::move(entry));
+		std::push_heap(heap.begin(), heap.end(), value_compare);
 	};
 	
 	template<typename... Args>
-		requires std::constructible_from<T, Args...>
-	constexpr void emplace(const K& key, Args&&... args) {
-		heap.emplace_back(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple(args...));
-		std::push_heap(heap.begin(), heap.end(), [](const auto& left, const auto& right) {
-			return C()(left.first, right.first);
-		});
+		requires std::constructible_from<std::pair<K, T>, Args...>
+	constexpr void emplace(Args&&... args) {
+		heap.emplace_back(std::forward<Args>(args)...);
+		std::push_heap(heap.begin(), heap.end(), value_compare);
 	}
 	
-	constexpr const T& top() const {
+	constexpr const T& top() const noexcept {
 		return heap.front().second;
 	}
 	
 	constexpr void pop() {
-		std::pop_heap(heap.begin(), heap.end(), [](auto& left, auto& right) {
-			return C()(left.first, right.first);
-		});
+		std::pop_heap(heap.begin(), heap.end(), value_compare);
 		heap.pop_back();
 	}
 
-	friend void swap(PriorityVectorQueue<K, T, C>& lhs, PriorityVectorQueue<K, T, C>& rhs) {
+	constexpr friend void swap(PriorityVectorQueue<K, T, C, I>& lhs, PriorityVectorQueue<K, T, C, I>& rhs) {
 		std::swap(lhs.heap, rhs.heap);
+		std::swap(lhs.value_compare, rhs.value_compare);
+		std::swap(lhs.value_ident, rhs.value_ident);
 	}
-
-	template<typename I = std::equal_to<T>>
-		requires std::predicate<I, T, T>
 	constexpr void raise_priority(const K& new_key, const T& value) {
 		// TODO: Is there a better way to do this?
-		auto it = std::find_if(heap.begin(), heap.end(), [&value](const auto& entry) {
-			return I()(entry.second, value);
-		});
+		auto it = std::find_if(heap.begin(), heap.end(), std::bind(value_ident, std::placeholders::_1, std::cref(value)));
 
-		if (it != heap.end()) {
+		if (it != heap.end()) { [[likely]]
 			it->first = new_key;
-			std::push_heap(heap.begin(), it, [](const auto& left, const auto& right) {
-				return C()(left.first, right.first);
-			});
+			std::push_heap(heap.begin(), it, value_compare);
 		}
 	}
-
-	template<typename I = std::equal_to<T>>
-		requires std::predicate<I, T, T>
-	constexpr void raise_priority(K&& new_key, T&& value) {
+	template<typename TT>
+		requires std::predicate<I, T, TT>
+	constexpr void raise_priority(const K& new_key, TT&& value) {
 		// TODO: Is there a better way to do this?
-		auto it = std::find_if(heap.begin(), heap.end(), [&value](const auto& entry) {
-			return I()(entry.second, value);
-		});
+		auto it = std::find_if(heap.begin(), heap.end(), std::bind(value_ident, std::placeholders::_1, std::cref(value)));
 
-		if (it != heap.end()) {
+		if (it != heap.end()) { [[likely]]
 			it->first = new_key;
-			std::push_heap(heap.begin(), it, [](const auto& left, const auto& right) {
-				return C()(left.first, right.first);
-			});
+			std::push_heap(heap.begin(), it, value_compare);
 		}
 	}
 
-	template<typename I, typename... Args>
-		requires std::predicate<I, T, Args...> && std::constructible_from<T, Args...>
-	constexpr void raise_priority(const K& new_key, Args&&... args) {
-		// TODO: Is there a better way to do this?
-		auto it = std::find_if(heap.begin(), heap.end(), [&args...](const auto& entry) {
-			return I()(entry.second, std::forward<Args>(args)...);
-		});
-
-		if (it != heap.end()) {
-			it->first = new_key;
-			std::push_heap(heap.begin(), it, [](const auto& left, const auto& right) {
-				return C()(left.first, right.first);
-			});
-		}
-	}
-
-	template<typename I, typename... Args>
-		requires std::predicate<I, T, Args...> && std::constructible_from<T, Args...>
-	constexpr void raise_priority(K&& new_key, Args&&... args) {
-		// TODO: Is there a better way to do this?
-		auto it = std::find_if(heap.begin(), heap.end(), [&args...](const auto& entry) {
-			return I()(entry.second, std::forward<Args>(args)...);
-		});
-
-		if (it != heap.end()) {
-			it->first = std::move(new_key);
-			std::push_heap(heap.begin(), it, [](const auto& left, const auto& right) {
-				return C()(left.first, right.first);
-			});
-		}
-	}
-
-	template<typename I, typename... Args>
-		requires std::predicate<I, T, T> && std::constructible_from<T, Args...>
-	constexpr void raise_priority(const K& new_key, Args&&... args) {
-		raise_priority<I>(new_key, { std::forward<Args>(args)... });
-	}
-
-	template<typename I, typename... Args>
-		requires std::predicate<I, T, T> && std::constructible_from<T, Args...>
-	constexpr void raise_priority(K&& new_key, Args&&... args) {
-		raise_priority<I>(std::move(new_key), { std::forward<Args>(args)... });
-	}
-
-	constexpr bool empty() const {
+	constexpr bool empty() const noexcept {
 		return heap.empty();
 	}
 
-	constexpr size_t size() const {
+	constexpr size_t size() const noexcept {
 		return heap.size();
 	}
 };
 
 namespace std {
-    template<typename K, typename T, typename C = std::less<K>>
-		requires std::predicate<C, K, K>
-    void swap(PriorityVectorQueue<K, T, C>& lhs, PriorityVectorQueue<K, T, C>& rhs) {
+    template<typename K, typename T, typename C = std::less<K>, typename I = std::equal_to<T>>
+		requires std::predicate<C, K, K> && std::predicate<I, T, T>
+    constexpr void swap(PriorityVectorQueue<K, T, C>& lhs, PriorityVectorQueue<K, T, C>& rhs) {
         swap(lhs, rhs);
     }
 }

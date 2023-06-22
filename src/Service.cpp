@@ -7,7 +7,7 @@
 
 extern "C" ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>::HANDLER init(ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>*info);
 
-Pather* pather;
+std::unique_ptr<Pather> pather;
 
 struct N {
     int key;
@@ -41,19 +41,13 @@ PathfindArguments::MapPathResult ipc_handler(const PathfindArguments& args) {
 }
 
 void cleanup() {
-	delete pather;
-	pather = nullptr;
+	pather->mLogger->info("DESTRUCTING");
+	pather.reset(nullptr);
 }
 
 ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>::HANDLER init(ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>* info) {
 	info->destructor = cleanup;
 	GameData* data = info->G;
-	pather = new Pather(data);
-	
-	auto path = ipc_handler(PathfindArguments{ PathfindArguments::Point{ 778,-506}, PathfindArguments::Point{ -700,906 }, "main", "main" });
-	std::cout << path.path.size() << std::endl;
-	for (PathfindArguments::Point point : path.path) {
-		pather->mLogger->info(std::to_string(point.x) + "," + std::to_string(point.y));
-	}
+	pather = std::unique_ptr<Pather>(new Pather(data));
 	return ipc_handler;
 }

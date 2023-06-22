@@ -9,6 +9,7 @@
 #include "TriangleManipulator/ShapeManipulator.hpp"
 #include <queue>
 #include <stack>
+#include <utility>
 
 
 #include <spdlog/async.h>
@@ -28,6 +29,7 @@ class MapPather {
 			int* neigh_ptr = triangle->neighborlist.get();
 			double* point_ptr = triangle->pointlist.get();
 			unsigned int* tri_ptr = triangle->trianglelist.get();
+			
 			if (neigh_ptr[from * 3] == to) {
 				auto left = tri_ptr[from * 3 + 2];
 				auto right = tri_ptr[from * 3 + 1];

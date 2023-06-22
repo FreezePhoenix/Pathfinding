@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 3.5)
 project ("Pathfinding")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -O3 -Wall -g -fPIC")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -Og -Wall -g -fPIC")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_subdirectory(lib/clipper-lib ./build/clipper-lib EXCLUDE_FROM_ALL)

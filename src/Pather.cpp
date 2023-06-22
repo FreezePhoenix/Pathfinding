@@ -309,22 +309,30 @@ PathfindArguments::MapPathResult MapPather::path(PointLocation::Vertex::Point BE
 	unsigned int real_end = end.value(); // roots[end];
 	PointLocation::Vertex::Point REAL_START = centers[real_start];
 	struct VisitedEntry { // Slightly more compact than an optional
-		double distance;
-		unsigned int parent;
-		bool visited;
-		inline void visit(double distance, unsigned int parent) {
+		double distance = 0.0;
+		unsigned int parent = 0;
+		enum STATUS {
+			EMPTY,
+			QUEUED,
+			VISITED
+		} status = EMPTY;
+		constexpr void queue(double distance, unsigned int parent) {
 			this->distance = distance;
 			this->parent = parent;
-			this->visited = true;
+			this->status = QUEUED;
 		}
-		inline void visit() {
-			this->visited = true;
+		constexpr void requeue(double distance, unsigned int parent) {
+			this->distance = distance;
+			this->parent = parent;
+		}
+		constexpr void visit() {
+			this->status = VISITED;
 		}
 	};
 	PriorityVectorQueue<double, unsigned int, std::greater<double>> queue;
 	queue.emplace(dist_sq(real_end, real_start), real_end);
 	std::vector<VisitedEntry> visited(this->neighbhors.size());
-	visited[real_end].visit(0.0, NULL_IDENFITIER);
+	visited[real_end].queue(0.0, NULL_IDENFITIER);
 	bool found = false;
 	while (!queue.empty()) {
 		const unsigned int curr_identifier = queue.top();
@@ -334,47 +342,52 @@ PathfindArguments::MapPathResult MapPather::path(PointLocation::Vertex::Point BE
 			break;
 		}
 		queue.pop();
-		const auto& curr_entry = visited[curr_identifier];
+		auto& curr_entry = visited[curr_identifier];
+		curr_entry.visit();
 		auto [first_neigh, second_neigh, third_neigh] = neighbhors[curr_identifier];
-		if (first_neigh != NULL_IDENFITIER) {
+		if (first_neigh != NULL_IDENFITIER && curr_entry.parent != first_neigh) {
 			auto& entry = visited[first_neigh];
-			if (!entry.visited) {
+			if (entry.status != VisitedEntry::VISITED) {
 				const double dist = curr_entry.distance + dist_sq(curr_identifier, first_neigh);
-				queue.push(dist + dist_sq(first_neigh, REAL_START), first_neigh);
-				entry.visit(dist, curr_identifier);
-			} else if (curr_entry.parent != first_neigh) {
-				const double dist = curr_entry.distance + dist_sq(curr_identifier, first_neigh);
-				if (dist < entry.distance) {
-					queue.raise_priority(dist + dist_sq(first_neigh, REAL_START), first_neigh);
-					entry.visit(dist, curr_identifier);
+				if (entry.status == VisitedEntry::QUEUED) {
+					if (dist < entry.distance) {
+						queue.raise_priority(dist + dist_sq(first_neigh, REAL_START), first_neigh);
+						entry.requeue(dist, curr_identifier);
+					}
+				} else {
+					queue.push(std::make_pair(dist + dist_sq(first_neigh, REAL_START), first_neigh));
+					entry.queue(dist, curr_identifier);
 				}
 			}
 		}
-		if (second_neigh != NULL_IDENFITIER) {
+		if (second_neigh != NULL_IDENFITIER && curr_entry.parent != second_neigh) {
+			
 			auto& entry = visited[second_neigh];
-			if (!entry.visited) {
+			if (entry.status != VisitedEntry::VISITED) {
 				const double dist = curr_entry.distance + dist_sq(curr_identifier, second_neigh);
-				queue.push(dist + dist_sq(second_neigh, REAL_START), second_neigh);
-				entry.visit(dist, curr_identifier);
-			} else if(curr_entry.parent != second_neigh) {
-				const double dist = curr_entry.distance + dist_sq(curr_identifier, second_neigh);
-				if (dist < entry.distance) {
-					queue.raise_priority(dist + dist_sq(second_neigh, REAL_START), second_neigh);
-					entry.visit(dist, curr_identifier);
+				if (entry.status == VisitedEntry::QUEUED) {
+					if (dist < entry.distance) {
+						queue.raise_priority(dist + dist_sq(second_neigh, REAL_START), second_neigh);
+						entry.requeue(dist, curr_identifier);
+					}
+				} else {
+					queue.push(std::make_pair(dist + dist_sq(second_neigh, REAL_START), second_neigh));
+					entry.queue(dist, curr_identifier);
 				}
 			}
 		}
-		if (third_neigh != NULL_IDENFITIER) {
+		if (third_neigh != NULL_IDENFITIER && curr_entry.parent != third_neigh) {
 			auto& entry = visited[third_neigh];
-			if (!entry.visited) {
+			if (entry.status != VisitedEntry::VISITED) {
 				const double dist = curr_entry.distance + dist_sq(curr_identifier, third_neigh);
-				queue.push(dist + dist_sq(third_neigh, REAL_START), third_neigh);
-				entry.visit(dist, curr_identifier);
-			} else if(curr_entry.parent != third_neigh) {
-				const double dist = curr_entry.distance + dist_sq(curr_identifier, third_neigh);
-				if (dist < entry.distance) {
-					queue.raise_priority(dist + dist_sq(third_neigh, REAL_START), third_neigh);
-					entry.visit(dist, curr_identifier);
+				if (entry.status == VisitedEntry::QUEUED) {
+					if (dist < entry.distance) {
+						queue.raise_priority(dist + dist_sq(third_neigh, REAL_START), third_neigh);
+						entry.requeue(dist, curr_identifier);
+					}
+				} else {
+					queue.push(std::make_pair(dist + dist_sq(third_neigh, REAL_START), third_neigh));
+					entry.queue(dist, curr_identifier);
 				}
 			}
 		}

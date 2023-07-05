@@ -5,7 +5,7 @@
 #include <variant>
 #include <iostream>
 
-extern "C" ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>::HANDLER init(ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>*info);
+extern "C" void init(ServiceInfo& info);
 
 std::unique_ptr<Pather> pather;
 
@@ -45,9 +45,9 @@ void cleanup() {
 	pather.reset(nullptr);
 }
 
-ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>::HANDLER init(ServiceInfo<PathfindArguments, PathfindArguments::MapPathResult>* info) {
-	info->destructor = cleanup;
-	GameData* data = info->G;
+void init(ServiceInfo& info) {
+	info.set_destructor(std::function(cleanup));
+	info.set_handler(std::function(ipc_handler));
+	GameData* data = info.G;
 	pather = std::unique_ptr<Pather>(new Pather(data));
-	return ipc_handler;
 }

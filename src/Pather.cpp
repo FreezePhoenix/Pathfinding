@@ -1,10 +1,8 @@
-#include <Pathfinding/Pather.hpp>
+#include "Pathfinding/Pather.hpp"
 #include "Pathfinding/Objectifier.hpp"
 #include "Pathfinding/PriorityVectorQueue.hpp"
-#include "Pathfinding/PriorityFibonacciQueue.hpp"
-#include <chrono>
+#include "TriangleManipulator/TriangleManipulator.hpp"
 
-#include <iostream>
 inline double distance(double dx, double dy) {
 	return std::sqrt(dx * dx + dy * dy);
 }
@@ -68,7 +66,7 @@ inline void string_pull(const PointLocation::Vertex::Point& start, const PointLo
 }
 
 MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(), roots(), neighbhors(), centers() {
-	this->mLogger = spdlog::stdout_color_mt<spdlog::async_factory>("Pathfinding:MapPather(" + info->name + ")");
+	this->mLogger = spdlog::stdout_color_mt("Pathfinding:MapPather(" + info->name + ")");
 	Objectifier objectifier(info);
 	objectifier.init(true);
 	objectifier.run();
@@ -207,40 +205,24 @@ MapPather::MapPather(std::shared_ptr<MapProcessing::MapInfo> info) : children(),
 	this->graph = output;
 	this->graph.process();
 	this->graph.map_triangles(output);
-	// TriangleManipulator::write_part_file("Maps/" + info->name + ".part", output);
-	// TriangleManipulator::write_poly_file("Maps/" + info->name + ".poly", input);
-	// TriangleManipulator::write_edge_file("Maps/" + info->name + ".v.edge", temp2);
-	// TriangleManipulator::write_node_file("Maps/" + info->name + ".v.node", voutput);
-	// TriangleManipulator::write_neigh_file("Maps/" + info->name + ".neigh", output);
-	// TriangleManipulator::write_edge_file("Maps/" + info->name + ".edge", output);
-	// std::cout << &test << std::endl;
+	
 	this->write_to_file(info->name);
 }
 
 void MapPather::write_to_file(std::string map_name) {
 	this->graph.write_to_binary_file("Maps/" + map_name + ".plgi");
 	std::string file_name = "Maps/" + map_name + ".pather";
-	TriangleManipulator::binary_writer<true> writer = TriangleManipulator::binary_writer<true>(file_name.c_str());
+	TriangleManipulator::binary_writer writer(file_name.c_str());
 
-	writer.write(children.size());
-	for (auto& child_entry : children) {
-		writer.write(child_entry.size());
-		for (auto& child : child_entry) {
-			writer.write(child);
-		}
-	}
 	writer.write(roots.size());
-	for (auto& root : roots) {
-		writer.write(root);
-	}
+	writer.write_array(roots.data(), roots.size());
+	
 	writer.write(neighbhors.size());
-	for (auto& neighbhor_entry : neighbhors) {
-		writer.write(neighbhor_entry);
-	}
+	writer.write_array(neighbhors.data(), neighbhors.size());
+	
 	writer.write(centers.size());
-	for (auto& center : centers) {
-		writer.write(center);
-	}
+	writer.write_array(centers.data(), centers.size());
+	
 	writer.close();
 	TriangleManipulator::write_neigh_file_binary("Maps/" + map_name + ".neigh.bin", triangle);
 	TriangleManipulator::write_node_file_binary("Maps/" + map_name + ".node.bin", triangle);
@@ -251,17 +233,8 @@ void MapPather::write_to_file(std::string map_name) {
 void MapPather::read_from_file(std::string map_name) {
 	this->graph.read_from_binary_file("Maps/" + map_name + ".plgi");
 	std::string file_name = "Maps/" + map_name + ".pather";
-	TriangleManipulator::binary_reader<true> reader = TriangleManipulator::binary_reader<true>(file_name.c_str());
-	size_t children_size = reader.read<size_t>();
-	children.reserve(children_size);
+	TriangleManipulator::binary_reader reader(file_name.c_str());
 	
-	for (size_t i = 0; i < children_size; i++) {
-		size_t child_entry_size = reader.read<size_t>();
-		std::set<unsigned int>& child_entry = children.emplace_back();
-		for (size_t j = 0; j < child_entry_size; j++) {
-			child_entry.emplace(reader.read<unsigned int>());
-		}
-	}
 	size_t roots_size = reader.read<size_t>();
 	roots.resize(roots_size);
 	reader.read_array(roots.data(), roots_size);
@@ -397,19 +370,13 @@ PathfindArguments::MapPathResult MapPather::path(PointLocation::Vertex::Point BE
 	}
 	PathfindArguments::MapPathResult result { PathfindArguments::MapPathResult::SUCCESS };
 	std::vector<std::pair<PointLocation::Vertex::Point, PointLocation::Vertex::Point>> portals;
-	// portals.push_back(BEGIN);
-	// portals.push_back(BEGIN);
+
 	for (unsigned int current_node = real_start, next_node = visited[current_node].parent; next_node != NULL_IDENFITIER; current_node = std::exchange(next_node, visited[next_node].parent)) {
 		portals.push_back(portal(current_node, next_node));
 	}
 	portals.emplace_back(END, END);
 	string_pull(BEGIN, END, portals, result.path);
-    // auto t2 = std::chrono::high_resolution_clock::now();
-	// std::chrono::duration<double, std::milli> ms_double = t2 - t1;
-	// for (PointLocation::Vertex::Point& point : result.path) {
-	// 	mLogger->info("{{{},{}}}", point.x, point.y);
-	// }
-	// mLogger->info("Pathfinding took: {}ms", ms_double.count());
+	
 	return result;
 }
 

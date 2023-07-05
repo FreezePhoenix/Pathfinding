@@ -1,6 +1,7 @@
 #include <functional>
 #include <vector>
 #include <algorithm>
+#include <concepts>
 
 template<typename K, typename T, typename C = std::less<K>, typename I = std::equal_to<T>>
 	requires std::predicate<C, K, K> && std::predicate<I, T, T>

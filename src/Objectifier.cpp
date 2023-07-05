@@ -39,6 +39,7 @@ void Objectifier::run() {
     for (const ClipperLib::Path& polygon : polygons) {
         num_lines += polygon.size();
     }
+    
     lines.reserve(num_lines);
     for (const ClipperLib::Path& polygon : polygons) {
         for (size_t i = 0; i < polygon.size() - 1; i++) {

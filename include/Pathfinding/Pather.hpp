@@ -5,11 +5,7 @@
 
 #include "Pathfinding/Service.hpp"
 #include "albot/MapProcessing/MapProcessing.hpp"
-#include "TriangleManipulator/TriangleManipulator.hpp"
 #include "TriangleManipulator/ShapeManipulator.hpp"
-#include <queue>
-#include <stack>
-#include <utility>
 
 
 #include <spdlog/async.h>
@@ -62,7 +58,7 @@ class Pather {
 		std::unordered_map<std::string, unsigned int> map_to_id;
 		std::vector<std::string> id_to_map;
 		GameData* data;
-		std::shared_ptr<spdlog::logger> mLogger = spdlog::stdout_color_mt<spdlog::async_factory>("Pathfinding:Pather");
+		std::shared_ptr<spdlog::logger> mLogger = spdlog::stdout_color_mt("Pathfinding:Pather");
 		std::vector<MapPather> maps;
 		Pather(GameData* data);
 };

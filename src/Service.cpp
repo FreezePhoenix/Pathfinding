@@ -50,4 +50,10 @@ void init(ServiceInfo& info) {
 	info.set_handler(std::function(ipc_handler));
 	GameData* data = info.G;
 	pather = std::unique_ptr<Pather>(new Pather(data));
+
+	auto path = ipc_handler(PathfindArguments{ PathfindArguments::Point{ 778,-506}, PathfindArguments::Point{ -700,906 }, "main", "main" });
+	std::cout << path.path.size() << std::endl;
+	for (PathfindArguments::Point point : path.path) {
+		pather->mLogger->info(std::to_string(point.x) + "," + std::to_string(point.y));
+	}
 }

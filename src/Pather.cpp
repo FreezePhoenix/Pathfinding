@@ -224,6 +224,7 @@ void MapPather::write_to_file(std::string map_name) {
 	writer.write_array(centers.data(), centers.size());
 	
 	writer.close();
+	
 	TriangleManipulator::write_neigh_file_binary("Maps/" + map_name + ".neigh.bin", triangle);
 	TriangleManipulator::write_node_file_binary("Maps/" + map_name + ".node.bin", triangle);
 	TriangleManipulator::write_ele_file_binary("Maps/" + map_name + ".ele.bin", triangle);
@@ -246,7 +247,6 @@ void MapPather::read_from_file(std::string map_name) {
 	size_t centers_size = reader.read<size_t>();
 	centers.resize(centers_size);
 	reader.read_array(centers.data(), centers_size);
-	
 	reader.close();
 
 	triangle = TriangleManipulator::create_instance();
@@ -256,7 +256,7 @@ void MapPather::read_from_file(std::string map_name) {
 }
 
 MapPather::MapPather(std::string map_name) : children(), roots(), neighbhors(), centers(), triangle(), graph() {
-	this->mLogger = spdlog::stdout_color_mt<spdlog::async_factory>("Pathfinding:MapPather(" + map_name + ")");
+	this->mLogger = spdlog::stdout_color_mt("Pathfinding:MapPather(" + map_name + ")");
 	this->read_from_file(map_name);
 }
 

@@ -381,9 +381,9 @@ PathfindArguments::MapPathResult MapPather::path(PointLocation::Vertex::Point BE
 }
 
 
-Pather::Pather(GameData* data) : map_to_id(), id_to_map(), data(data), maps() {
-	const nlohmann::json& geo = data->operator[]("geometry");
-	const nlohmann::json& maps = data->operator[]("maps");
+Pather::Pather(const GameData& data) : map_to_id(), id_to_map(), maps() {
+	const nlohmann::json& geo = data["geometry"];
+	const nlohmann::json& maps = data["maps"];
 	for (auto& [key, value] : geo.items()) {
 		if (value["x_lines"].is_array() && value["x_lines"].size() > 0) {
 			unsigned int id = map_to_id.size();
@@ -398,7 +398,7 @@ Pather::Pather(GameData* data) : map_to_id(), id_to_map(), data(data), maps() {
 			for (const nlohmann::json& entry : json_spawns) {
 				info_spawns.emplace_back(entry[0].get<double>(), entry[1].get<double>());
 			}
-			if (data->was_cached) {
+			if (data.was_cached) {
 				mLogger->info("Registering cached map {} with id {}", key, id);
 				this->maps.emplace_back(key);
 			} else {
@@ -406,7 +406,7 @@ Pather::Pather(GameData* data) : map_to_id(), id_to_map(), data(data), maps() {
 				this->maps.emplace_back(info);
 			}
 		} else {
-			if (data->was_cached) {
+			if (data.was_cached) {
 				mLogger->info("Skipping cached map {}", key);
 			} else {
 				mLogger->info("Skipping map {}", key);

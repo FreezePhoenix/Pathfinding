@@ -2,7 +2,6 @@
 #include "Pathfinding/Pather.hpp"
 #include "Pathfinding/PriorityFibonacciQueue.hpp"
 #include <memory>
-#include <variant>
 #include <iostream>
 
 extern "C" void init(ServiceInfo& info);
@@ -32,7 +31,6 @@ PathfindArguments::MapPathResult ipc_handler(const PathfindArguments& args) {
 		return { PathfindArguments::MapPathResult::FAIL };
 	} else {
 		if (pather->map_to_id.contains(args.start_map)) {
-			
 			unsigned int map_id = pather->map_to_id[args.start_map];
 			return pather->maps[map_id].path(args.start, args.end);
 		}
@@ -48,8 +46,7 @@ void cleanup() {
 void init(ServiceInfo& info) {
 	info.set_destructor(std::function(cleanup));
 	info.set_handler(std::function(ipc_handler));
-	GameData* data = info.G;
-	pather = std::unique_ptr<Pather>(new Pather(data));
+	pather = std::make_unique<Pather>(info.G);
 
 	auto path = ipc_handler(PathfindArguments{ PathfindArguments::Point{ 778,-506}, PathfindArguments::Point{ -700,906 }, "main", "main" });
 	std::cout << path.path.size() << std::endl;
